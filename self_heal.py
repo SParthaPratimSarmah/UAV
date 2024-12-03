@@ -1,9 +1,7 @@
 import random
 import math
 import matplotlib.pyplot as plt
-import time
 import numpy as np
-
 
 # Function to calculate users covered by a UAV at a given position
 def users_covered_by_uav(uav_pos, users, coverage_radius, covered_users):
@@ -21,7 +19,7 @@ def estimate_uav_count(m, n, coverage_radius, k=0.75):
     return math.floor(max(1, int(estimated_uavs)))  # Ensure at least 1 UAV is estimated
 
 # Ant Colony Optimization for UAV Placement with limited UAVs
-def ant_colony_uav_placement(m, n, users, num_ants, iterations, coverage_radius, max_uavs, threshold=0.95, k=15, best_record=0, alpha=1.0, beta=2.0, evaporation_rate=0.5, Q=100):
+def self_healing_placement(m, n, users, num_ants, iterations, coverage_radius, max_uavs, threshold=0.95, k=15, best_record=0, alpha=1.0, beta=2.0, evaporation_rate=0.5, Q=100):
 
     if iterations <=0 or max_uavs <= 0:
         return [], 0
@@ -34,7 +32,7 @@ def ant_colony_uav_placement(m, n, users, num_ants, iterations, coverage_radius,
 
     for iteration in range(iterations):
         curr_iter += 1
-        all_solutions = []
+        all_solutions = [] 
         all_coverages = []
 
         # Each ant builds a solution (places UAVs)
@@ -44,6 +42,8 @@ def ant_colony_uav_placement(m, n, users, num_ants, iterations, coverage_radius,
 
             # Limit the number of UAVs placed by each ant
             for _ in range(max_uavs):
+
+                
                 probabilities = np.zeros((m, n))
 
                 # Calculate the probability of placing a UAV at each position
@@ -97,7 +97,7 @@ def ant_colony_uav_placement(m, n, users, num_ants, iterations, coverage_radius,
 
     if best_coverage >= best_record:
         print(f"---------Searching for {max_uavs-1} UAVs ----------")
-        rec_solution, rec_coverage = ant_colony_uav_placement(m, n, users, num_ants, iterations-curr_iter, coverage_radius, max_uavs-1, threshold, k, best_coverage, alpha, beta, evaporation_rate, Q)
+        rec_solution, rec_coverage = self_healing_placement(m, n, users, num_ants, iterations-curr_iter, coverage_radius, max_uavs-1, threshold, k, best_coverage, alpha, beta, evaporation_rate, Q)
 
         if rec_coverage >= best_coverage:
             return rec_solution, rec_coverage
@@ -121,14 +121,6 @@ def within_beamforming_angle(uav1_angle, uav2_angle, beamwidth=30):
 # Function to calculate distance between two points
 def distance(p1, p2):
     return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
-
-
-# def users_covered_by_uav(uav_pos, users, coverage_radius):
-#     covered_users = []
-#     for user in users:
-#         if distance(uav_pos, user.position) <= coverage_radius:
-#             covered_users.append(user)
-#     return covered_users
 
 
 def move_users(users, m, n, step_size=0.5):
@@ -208,79 +200,6 @@ class UAV:
                 if within_beamforming_angle(self.beam_angle, uav_angle, self.beamwidth):
                     self.connected_uavs.add(uav)
 
-
-def place_uavs_greedy(m, n, users, coverage_radius, coverage_threshold=0.90):
-    uav_positions = [(i, j) for i in range(m) for j in range(n)]
-    selected_uavs = []
-    covered_users = set()
-    total_users = len(users)
-    required_coverage = coverage_threshold * total_users
-
-    uav_cover_dict = []
-
-    while len(covered_users) < required_coverage:
-        best_uav = None
-        best_covered_users = set()
-        best_penalty = float('inf')
-
-        for uav_pos in uav_positions:
-            current_covered_users = set(users_covered_by_uav(uav_pos, users, coverage_radius))
-            new_covered_users = current_covered_users - covered_users
-
-            # Calculate overlap with previously selected UAVs
-            overlap = 0
-            for cov_users in uav_cover_dict:
-                overlap += len(current_covered_users & cov_users)
-
-            # Apply penalty proportional to the overlap
-            penalty = 0.3 * overlap
-
-            # Choose the UAV that maximizes new coverage while minimizing penalty
-            if len(new_covered_users) - penalty > len(best_covered_users) - best_penalty:
-                best_uav = uav_pos
-                best_covered_users = new_covered_users
-                best_penalty = penalty
-
-        if best_uav is None:
-            break
-
-        selected_uavs.append(best_uav)
-        covered_users.update(best_covered_users)
-        uav_positions.remove(best_uav)
-        uav_cover_dict.append(best_covered_users)
-
-    return selected_uavs, covered_users
-
-
-# Simulated Annealing for Local Search
-def simulated_annealing(uavs, users, coverage_radius, temp=1000, cooling_rate=0.99):
-    current_uavs = uavs
-    best_uavs = uavs
-    best_coverage = len(set([u for uav in current_uavs for u in uav.covered_users]))
-
-    while temp > 1:
-        # Randomly move one UAV by a small amount
-        new_uavs = random.choice(current_uavs)
-        new_pos = [new_uavs.position[0] + random.uniform(-1, 1), new_uavs.position[1] + random.uniform(-1, 1)]
-        new_uavs.position = [max(0, min(new_pos[0], m)), max(0, min(new_pos[1], n))]
-
-        # Update coverage for the new configuration
-        for uav in current_uavs:
-            uav.update_coverage(users)
-
-        new_coverage = len(set([u for uav in current_uavs for u in uav.covered_users]))
-
-        # Decide whether to accept the new configuration
-        if new_coverage > best_coverage or random.uniform(0, 1) < math.exp((new_coverage - best_coverage) / temp):
-            best_uavs = current_uavs
-            best_coverage = new_coverage
-
-        # Cool down the system
-        temp *= cooling_rate
-
-    return best_uavs
-
-
 # User Class
 class User:
     def __init__(self, position):
@@ -299,12 +218,11 @@ class User:
             users.append(User([x, y]))
         return users
 
-
 # Simulation parameters
 m, n = 10, 10  # Grid size
 num_users = 50  # Number of users
-coverage_radius = 2.5  # Coverage radius of each UAV
-backhaul_range = 8.0  # Backhaul connection range between UAVs
+coverage_radius = 2.0  # Coverage radius of each UAV
+backhaul_range = 12.0  # Backhaul connection range between UAVs
 time_steps = 10  # Number of time steps to simulate
 min_threshold = 0.90  # Minimum threshold value of user coverage
 num_ants = 20  # Number of ants
@@ -312,54 +230,99 @@ iterations = 100  # Maximum number of iterations
 max_uavs_per_ant=estimate_uav_count(m,n,coverage_radius,0.75)
 threshold=0.95 # Threshold value of user coverage
 k=15 # Allowed repition with same coverage
+# Initialize the list of operational UAVs
 
 # Initialize users and UAVs
 users = User.generate_random_users(m, n, num_users)
-uavs, _ = ant_colony_uav_placement(m, n, users, num_ants, iterations, coverage_radius,max_uavs_per_ant,threshold,k)
+uavs, _ = self_healing_placement(m, n, users, num_ants, iterations, coverage_radius,max_uavs_per_ant,threshold,k)
 uavs = [UAV(uav, coverage_radius, backhaul_range, 30) for uav in uavs]
-
-# uavs = []
-# for pos in selected_uavs:
-#     uavs.append(UAV(pos, coverage_radius, backhaul_range, beamwidth=30))
 
 for uav in uavs:
     uav.update_coverage(users)
     uav.update_backhaul_connections(uavs)
 
+# Modify the time-stepped simulation to include UAV failure handling
+failed_uavs = set()
+
+# Initialize the list of operational UAVs
+operational_uavs = uavs[:]  # Start with all UAVs as operational
+
+# Initialize lists to store time-step data
+coverage_over_time = []
+uavs_over_time = []
+
 # Time-stepped simulation
+# Ensure coverage is captured correctly and percentages are displayed
 for time_step in range(time_steps):
+    # Simulate UAV failure at random
+    if random.random() < 0.2:  # Adjust probability as needed
+        num_failures = random.randint(1, 2)  # Fail 1 or 2 UAVs randomly
+        failed_uav_indices = random.sample(range(len(uavs)), num_failures)
+        
+        for idx in failed_uav_indices:
+            failed_uavs.add(uavs[idx])
+
+        # Update the list of operational UAVs after failure
+        operational_uavs = [uav for uav in uavs if uav not in failed_uavs]
+
+        print(f"Time Step {time_step}: UAV failure detected. Adjusting positions...")
+
+        # Update coverage and connections for operational UAVs
+        for uav in operational_uavs:
+            uav.update_coverage(users)
+            uav.update_backhaul_connections(operational_uavs)
+
     # Move users
     move_users(users, m, n)
 
-    # Recalculate UAV coverage after user movement
-    for uav in uavs:
+    # Recalculate UAV coverage after user movement and failure adjustments
+    for uav in operational_uavs:
         uav.update_coverage(users)
-        uav.update_backhaul_connections(uavs)
+        uav.update_backhaul_connections(operational_uavs)
 
-    covered_users = set([u for uav in uavs for u in uav.covered_users])
-    current_coverage = len(covered_users) / num_users
+    # Calculate the coverage percentage
+    covered_users = set([u for uav in operational_uavs for u in uav.covered_users])
+    current_coverage = (len(covered_users) / num_users) * 100  # Convert to percentage
 
-    print(f"Time Step {time_step}: Coverage = {current_coverage:.2f}")
+    # Print time step information with required metrics
+    print(f"Time Step {time_step}: UAV Count = {len(operational_uavs)}, Coverage = {current_coverage:.2f}%")
+
+    # Record the coverage and UAV count for this time step
+    coverage_over_time.append(current_coverage)
+    uavs_over_time.append(len(operational_uavs))
 
     # Check if coverage drops below the minimum threshold
-    if current_coverage < min_threshold:
-        # Visualize the grid and UAV coverage
-        # visualize_grid(m, n, users, uavs, coverage_radius, time_step)
+    if current_coverage < min_threshold * 100:  # Compare with min_threshold as a percentage
         print(f"Coverage below threshold at time step {time_step}, running local search...")
-        uavs, _ = ant_colony_uav_placement(m, n, users, num_ants, iterations, coverage_radius,max_uavs_per_ant,threshold,k)
+
+        # Rerun the ant colony or a simple repositioning algorithm to restore coverage
+        uavs, _ = self_healing_placement(m, n, users, num_ants, iterations, coverage_radius, max_uavs_per_ant, threshold, k)
         uavs = [UAV(uav, coverage_radius, backhaul_range, 30) for uav in uavs]
 
-            # Recalculate UAV coverage after user movement
-        for uav in uavs:
-            uav.update_coverage(users)
-            uav.update_backhaul_connections(uavs)
-
-        covered_users = set([u for uav in uavs for u in uav.covered_users])
-        current_coverage = len(covered_users) / num_users
-
-        print(f"Time Step {time_step}: Coverage = {current_coverage:.2f}")
-
-
+        # Reset failed UAVs and update operational UAVs
+        failed_uavs.clear()
+        operational_uavs = uavs[:]
 
     # Visualize the grid and UAV coverage
-    visualize_grid(m, n, users, uavs, coverage_radius, time_step)
+    visualize_grid(m, n, users, operational_uavs, coverage_radius, time_step)
+
+# Plot the graph after the simulation ends
+# Plot Coverage vs Time Step
+plt.figure(figsize=(12, 6))
+plt.plot(range(time_steps), coverage_over_time, label="Coverage (%)", color="b")
+plt.xlabel("Time Steps")
+plt.ylabel("Coverage (%)")
+plt.title("User Coverage Over Time")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Plot Number of UAVs vs Time Step
+plt.figure(figsize=(12, 6))
+plt.plot(range(time_steps), uavs_over_time, label="Number of UAVs", color="r")
+plt.xlabel("Time Steps")
+plt.ylabel("Number of UAVs")
+plt.title("UAV Count Over Time")
+plt.legend()
+plt.grid(True)
+plt.show()
